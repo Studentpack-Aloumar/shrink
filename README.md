@@ -36,7 +36,16 @@ Everything is in `index.html` (no build step, no dependencies). The RINEX logic 
 
 ```sh
 node test/run.js
+git config core.hooksPath .githooks   # once per clone: runs the tests before every push
 ```
+
+## Deploy
+
+1. `node test/run.js` (the pre-push hook does this too).
+2. `vercel` to get a preview, then smoke test: drop in a RINEX 2 and a 3.x file, save, check each output is about 1 MB, named `SSSSDDD0.YYO`, and the antenna height matches.
+3. `vercel --prod`, then check `curl https://shrink-gnss.vercel.app/ | cmp - index.html`.
+
+**Rollback:** in Vercel, open the previous Ready deployment and choose *Promote to Production* (or `vercel rollback`). Roll back if the page fails to load, the script throws on a dropped file, or AUSPOS rejects the output.
 
 Not affiliated with Geoscience Australia.
 
