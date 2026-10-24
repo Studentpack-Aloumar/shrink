@@ -1,0 +1,5 @@
+*.26O
+*.25O
+*.rnx
+.DS_Store
+node_modules/

@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Shrink large GNSS RINEX observation files for AUSPOS. Runs in your browser, nothing is uploaded.">
+<title>Shrink for AUSPOS</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b6e5a'/%3E%3Cpath d='M16 7v13m0 0-5-5m5 5 5-5M9 25h14' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* Layout: one centred column that changes state: empty drop zone → file list → done. */
+:root {
+  --bg: #f2f5f3;
+  --surface: #ffffff;
+  --fg: #142019;
+  --muted: #5a6a62;
+  --line: #d3ddd8;
+  --accent: #0b6e5a;
+  --accent-fg: #ffffff;
+  --accent-soft: #e0f0ea;
+  --warn: #8f5400;
+  --warn-soft: #fcefd8;
+  --bad: #b3261e;
+  --bad-soft: #fbe4e1;
+  --font-ui: "Avenir Next", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-data: "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101614; --surface: #17201c; --fg: #e4ece8; --muted: #97a8a0; --line: #2a3631;
+    --accent: #43b896; --accent-fg: #05120d; --accent-soft: #163128;
+    --warn: #e8ad52; --warn-soft: #32260f; --bad: #f2897e; --bad-soft: #3a1916;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101614; --surface: #17201c; --fg: #e4ece8; --muted: #97a8a0; --line: #2a3631;
+  --accent: #43b896; --accent-fg: #05120d; --accent-soft: #163128;
+  --warn: #e8ad52; --warn-soft: #32260f; --bad: #f2897e; --bad-soft: #3a1916;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 17px/1.5 var(--font-ui);
+  padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 640px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font-size: 1.8rem; line-height: 1.15; margin: 0; letter-spacing: -0.015em; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+header { display: grid; gap: 8px; }
+
+/* Steps */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.steps li { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); min-width: 0; }
+.steps .n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .85rem; border: 2px solid var(--line); }
+.steps li.on { color: var(--fg); font-weight: 600; }
+.steps li.on .n { border-color: var(--accent); color: var(--accent); }
+.steps li.done .n { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
+/* Drop zone */
+#drop {
+  display: grid; justify-items: center; gap: 14px; text-align: center; cursor: pointer;
+  background: var(--surface); border: 2px dashed var(--line); border-radius: 16px; padding: 48px 20px;
+  transition: border-color .15s, background-color .15s;
+}
+#drop:hover, #drop.over { border-color: var(--accent); background: var(--accent-soft); }
+#drop svg { width: 44px; height: 44px; color: var(--accent); }
+#drop .big { font-size: 1.2rem; font-weight: 600; }
+#drop.compact { padding: 18px; gap: 6px; }
+#drop.compact svg, #drop.compact .hint { display: none; }
+#drop.compact .big { font-size: 1rem; color: var(--accent); }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+#drop:focus-within { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: inherit; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer; text-decoration: none;
+  padding: 15px 22px; background: var(--accent); color: var(--accent-fg); width: 100%;
+}
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: transparent; color: var(--muted); font-weight: 600; padding: 8px; width: auto; }
+.btn:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* File list */
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 16px; border-top: 1px solid var(--line); align-items: center; }
+.row:first-child { border-top: 0; }
+.row .name { font-family: var(--font-data); font-size: .95rem; font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+.row .sub { grid-column: 1 / -1; font-size: .88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .sub b { color: var(--fg); font-weight: 600; }
+.row .msg { grid-column: 1 / -1; font-size: .88rem; padding: 6px 10px; border-radius: 8px; }
+.msg.warn { background: var(--warn-soft); color: var(--warn); }
+.msg.bad { background: var(--bad-soft); color: var(--bad); }
+.tag { font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.tag.ok { background: var(--accent-soft); color: var(--accent); }
+.tag.work { color: var(--muted); }
+.tag.bad { background: var(--bad-soft); color: var(--bad); }
+.bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.status { padding: 12px 16px; border-radius: 12px; font-size: .95rem; }
+.status.ok { background: var(--accent-soft); }
+.status.bad { background: var(--bad-soft); color: var(--bad); }
+.actions { display: grid; gap: 10px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* AUSPOS box */
+.next { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 16px; }
+.next h2 { font-size: 1.15rem; margin: 0; }
+.heights { display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+.heights div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--bg); border-radius: 8px; font-family: var(--font-data); font-size: .95rem; }
+.heights b { color: var(--accent); }
+.howto { margin: 0; padding-left: 1.25em; display: grid; gap: 6px; font-size: .95rem; }
+details { font-size: .9rem; color: var(--muted); }
+summary { cursor: pointer; font-weight: 600; }
+details ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+footer { font-size: .85rem; color: var(--muted); text-align: center; }
+footer a { color: inherit; }
+@media (max-width: 480px) { .steps .t { font-size: .8rem; } h1 { font-size: 1.5rem; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Shrink GNSS files for AUSPOS</h1>
+    <p class="muted">Turns large RINEX files into small ones that upload fast. AUSPOS gives the same result. Your files never leave this computer.</p>
+  </header>
+
+  <ol class="steps" aria-label="Progress">
+    <li id="s1" class="on"><span class="n">1</span><span class="t">Add files</span></li>
+    <li id="s2"><span class="n">2</span><span class="t">Save</span></li>
+    <li id="s3"><span class="n">3</span><span class="t">Send to AUSPOS</span></li>
+  </ol>
+
+  <label id="drop" for="pick">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+    <span class="big">Drop files here or tap to choose</span>
+    <span class="hint muted">RINEX observation files, like <code>.26O</code>. Several at once is fine.</span>
+    <input type="file" id="pick" multiple>
+  </label>
+
+  <section id="work" class="actions" hidden>
+    <div class="list" id="list"></div>
+    <div id="status"></div>
+    <button class="btn" id="saveAll" disabled>Save small files</button>
+    <div class="toolbar"><span class="muted" id="where"></span><button class="btn ghost" id="clear">Start over</button></div>
+  </section>
+
+  <section class="next" id="next" hidden>
+    <h2>Now send them to AUSPOS</h2>
+    <a class="btn" href="https://gnss.ga.gov.au/auspos" target="_blank" rel="noopener">Open AUSPOS ↗</a>
+    <ol class="howto">
+      <li>Click <b>Choose File(s)</b> and select all the small files from your Downloads folder.</li>
+      <li>Check the heights match:</li>
+    </ol>
+    <div class="heights" id="heights"></div>
+    <ol class="howto" start="3">
+      <li>If it says <i>No valid antenna type</i>, leave <b>DEFAULT(NONE)</b>.</li>
+      <li>Enter the email for the results and click <b>Submit</b>. A green box with a job number means it worked.</li>
+    </ol>
+  </section>
+
+  <details>
+    <summary>What does this do?</summary>
+    <ul>
+      <li>AUSPOS only uses GPS and samples every 30 seconds. This tool removes the other satellite systems and the extra samples before upload, so files are about 70 times smaller.</li>
+      <li>Antenna height, antenna type and station name are kept unchanged.</li>
+      <li>It checks each file has at least 1 hour of data, and that files sent together overlap by more than 1 hour.</li>
+      <li>Wait until after 03:00 UTC the day after measuring before submitting.</li>
+    </ul>
+  </details>
+
+  <footer>Free and open source · <a href="https://github.com/Studentpack-Aloumar/shrink" target="_blank" rel="noopener">GitHub</a> · Not affiliated with Geoscience Australia</footer>
+</main>
+
+<script id="core">
+/* ---- RINEX core (pure, no DOM) ---- */
+const KEEP_SYS_LABELS = new Set(["SYS / # / OBS TYPES","SYS / PHASE SHIFT","SYS / SCALE FACTOR","SYS / DCBS APPLIED","SYS / PCVS APPLIED"]);
+const DROP_LABELS = new Set(["GLONASS SLOT / FRQ #","GLONASS COD/PHS/BIS"]);
+const INTERVAL = 30;
+
+function isMultiple(sec) { const r = sec / INTERVAL; return Math.abs(r - Math.round(r)) < 1e-6; }
+function pad(s, n) { s = String(s); return s.length >= n ? s : " ".repeat(n - s.length) + s; }
+function fmtTimeHdr(t) {
+  return ("  " + pad(t.y,4) + "    " + pad(String(t.mo).padStart(2,"0"),2) + "    " + pad(String(t.d).padStart(2,"0"),2) +
+    "    " + pad(String(t.h).padStart(2,"0"),2) + "    " + pad(String(t.mi).padStart(2,"0"),2) + pad(t.s.toFixed(7),13) + "     GPS").padEnd(60);
+}
+function hdrLine(content, label) { return content.padEnd(60).slice(0,60) + label.padEnd(20) + "\n"; }
+
+class RinexShrinker {
+  constructor() {
+    this.inHeader = true; this.header = []; this.out = []; this.version = null; this.fileType = null;
+    this.info = { marker: "", receiver: "", antenna: "", height: null, interval: null };
+    this.first = null; this.last = null; this.epochsIn = 0; this.epochsOut = 0;
+    this.v2 = { nobs: 0, lps: 1, state: "epoch", need: 0, sats: [], recs: [], epochLine: "", t: null, count: 0, satLinesLeft: 0 };
+    this.v3 = { buf: null };
+    this.curSys = null; this.error = null; this.sawInterval = false;
+  }
+  line(l) {
+    if (l.endsWith("\r")) l = l.slice(0, -1);
+    if (this.inHeader) return this.headerLine(l);
+    if (this.version >= 3) this.v3Line(l); else this.v2Line(l);
+  }
+  headerLine(l) {
+    const label = l.slice(60).trim(), body = l.slice(0, 60);
+    if (label === "RINEX VERSION / TYPE") {
+      this.version = parseFloat(body.slice(0, 9)); this.fileType = body[20];
+      if (this.fileType !== "O") this.error = "Not an observation file (type '" + body[20] + "'). Only O files are needed.";
+      this.header.push({ label, l: body.slice(0,40) + (this.version >= 3 ? "G: GPS" : "G (GPS)").padEnd(20) + "RINEX VERSION / TYPE" }); return;
+    }
+    if (label === "MARKER NAME") this.info.marker = body.trim();
+    if (label === "REC # / TYPE / VERS") this.info.receiver = body.slice(20, 40).trim();
+    if (label === "ANT # / TYPE") this.info.antenna = body.slice(20, 40).trim();
+    if (label === "ANTENNA: DELTA H/E/N") this.info.height = parseFloat(body.slice(0, 14));
+    if (label === "INTERVAL") this.info.interval = parseFloat(body.slice(0, 10));
+    if (label === "# / TYPES OF OBSERV" && body.slice(0,6).trim()) { this.v2.nobs = parseInt(body.slice(0, 6)); this.v2.lps = Math.max(1, Math.ceil(this.v2.nobs / 5)); }
+    if (label === "END OF HEADER") {
+      this.inHeader = false;
+      if (this.version === null) this.error = "This does not look like a RINEX file.";
+      this.header.push({ label, l }); return;
+    }
+    if (DROP_LABELS.has(label)) return;
+    if (KEEP_SYS_LABELS.has(label)) {
+      if (l[0] !== " ") this.curSys = l[0];
+      if (this.curSys !== "G") return;
+    }
+    if (label === "INTERVAL") { this.header.push({ label, l: hdrLine(pad(INTERVAL.toFixed(3),10), "INTERVAL").replace(/\n$/, "") }); this.sawInterval = true; return; }
+    this.header.push({ label, l });
+  }
+  /* RINEX 3/4 */
+  v3Line(l) {
+    if (l[0] === ">") { this.v3Flush(); this.v3.buf = [l]; return; }
+    if (this.v3.buf) this.v3.buf.push(l);
+  }
+  v3Flush() {
+    const b = this.v3.buf; if (!b) return; this.v3.buf = null;
+    const h = b[0], p = h.slice(1).trim().split(/\s+/);
+    const flag = parseInt(p[6]);
+    if (!(flag === 0 || flag === 1)) return;
+    this.epochsIn++;
+    const t = { y: +p[0], mo: +p[1], d: +p[2], h: +p[3], mi: +p[4], s: parseFloat(p[5]) };
+    if (!isMultiple(t.s)) return;
+    const sats = b.slice(1).filter(x => x[0] === "G");
+    if (!sats.length) return;
+    this.out.push(h.slice(0, 32) + pad(sats.length, 3) + h.slice(35) + "\n" + sats.join("\n") + "\n");
+    this.epochsOut++; if (!this.first) this.first = t; this.last = t;
+  }
+  /* RINEX 2 */
+  v2Line(l) {
+    const s = this.v2;
+    if (s.state === "epoch") {
+      if (!l.trim()) return;
+      const flag = parseInt(l[28]); const n = parseInt(l.slice(29, 32)) || 0;
+      s.epochLine = l; s.count = n; s.sats = []; s.recs = [];
+      if (flag > 1) { s.state = "skip"; s.need = n; if (!n) s.state = "epoch"; return; }
+      let yy = parseInt(l.slice(1, 3)); yy += yy < 80 ? 2000 : 1900;
+      s.t = { y: yy, mo: +l.slice(4,6), d: +l.slice(7,9), h: +l.slice(10,12), mi: +l.slice(13,15), s: parseFloat(l.slice(15,26)) };
+      this.epochsIn++;
+      this.v2AddSats(l.slice(32, 68));
+      s.satLinesLeft = Math.ceil(n / 12) - 1;
+      s.state = s.satLinesLeft > 0 ? "satlist" : "obs"; s.need = n * s.lps;
+      if (s.state === "obs" && s.need === 0) s.state = "epoch";
+      return;
+    }
+    if (s.state === "skip") { if (--s.need <= 0) s.state = "epoch"; return; }
+    if (s.state === "satlist") {
+      this.v2AddSats(l.slice(32, 68));
+      if (--s.satLinesLeft <= 0) s.state = "obs";
+      return;
+    }
+    if (s.state === "obs") {
+      s.recs.push(l);
+      if (s.recs.length >= s.need) { this.v2Flush(); s.state = "epoch"; }
+    }
+  }
+  v2AddSats(str) { for (let i = 0; i + 3 <= str.length; i += 3) { const c = str.slice(i, i + 3); if (c.trim()) this.v2.sats.push(c); } }
+  v2Flush() {
+    const s = this.v2;
+    if (!isMultiple(s.t.s)) return;
+    const keep = [];
+    s.sats.forEach((sat, i) => { if (sat[0] === "G" || sat[0] === " ") keep.push(i); });
+    if (!keep.length) return;
+    const ids = keep.map(i => s.sats[i]);
+    const head = s.epochLine.slice(0, 29).padEnd(29) + pad(ids.length, 3);
+    const lines = [];
+    for (let i = 0; i < ids.length; i += 12) lines.push((i === 0 ? head : " ".repeat(32)) + ids.slice(i, i + 12).join(""));
+    keep.forEach(i => { for (let k = 0; k < s.lps; k++) lines.push(s.recs[i * s.lps + k] ?? ""); });
+    this.out.push(lines.join("\n") + "\n");
+    this.epochsOut++; if (!this.first) this.first = s.t; this.last = s.t;
+  }
+  finish() {
+    if (this.version >= 3) this.v3Flush();
+    if (this.inHeader && !this.error) this.error = "The file ended before the header was complete.";
+    if (!this.error && !this.epochsOut) this.error = "No GPS data found at 30-second marks.";
+    const hdr = [];
+    for (const h of this.header) {
+      if (h.label === "TIME OF FIRST OBS" && this.first) { hdr.push(fmtTimeHdr(this.first) + "TIME OF FIRST OBS"); if (!this.sawInterval) { hdr.push(hdrLine(pad(INTERVAL.toFixed(3),10), "INTERVAL").replace(/\n$/, "")); this.sawInterval = true; } continue; }
+      if (h.label === "TIME OF LAST OBS" && this.last) { hdr.push(fmtTimeHdr(this.last) + "TIME OF LAST OBS"); continue; }
+      hdr.push(h.l);
+    }
+    return { header: hdr.join("\n") + "\n", body: this.out };
+  }
+}
+function toDate(t) { return new Date(Date.UTC(t.y, t.mo - 1, t.d, t.h, t.mi, Math.floor(t.s))); }
+function doy(t) { const d = toDate(t); return Math.floor((d - Date.UTC(t.y, 0, 1)) / 864e5) + 1; }
+function outName(marker, t, used) {
+  const st = (marker.replace(/[^A-Za-z0-9]/g, "").toUpperCase() || "STAT").slice(0, 4);
+  const base = st + String(doy(t)).padStart(3, "0");
+  const yy = String(t.y % 100).padStart(2, "0");
+  for (const sess of "0abcdefghijklmnopqrstuvwx") { const n = base + sess + "." + yy + "O"; if (!used.has(n)) { used.add(n); return n; } }
+  return base + "z." + yy + "O";
+}
+if (typeof module !== "undefined") module.exports = { RinexShrinker, outName, toDate };
+</script>
+
+<script>
+/* ---- UI ---- */
+const $ = s => document.querySelector(s);
+const jobs = []; const usedNames = new Set(); let saved = false;
+const fmtMB = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+const fmtT = d => d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+const fmtDur = ms => { const m = Math.round(ms / 60000); return Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min"; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function setStep(n) {
+  ["#s1", "#s2", "#s3"].forEach((id, i) => { const el = $(id); el.className = i + 1 < n ? "done" : i + 1 === n ? "on" : ""; });
+}
+
+function addFiles(list) {
+  if (!list.length) return;
+  if (saved) reset();
+  for (const f of list) {
+    const job = { file: f, el: document.createElement("div") };
+    job.el.className = "row";
+    job.el.innerHTML = `<span class="name">${esc(f.name)}</span><span class="tag work">Shrinking…</span><div class="bar"><i></i></div>`;
+    $("#list").appendChild(job.el); jobs.push(job);
+    run(job);
+  }
+  $("#work").hidden = false; $("#drop").classList.add("compact");
+  $("#drop .big").textContent = "+ Add more files";
+  update();
+}
+
+async function run(job) {
+  const f = job.file, bar = job.el.querySelector(".bar i");
+  if (/\.(gz|z|zip|crx|\d\dd)$/i.test(f.name)) return fail(job, "This file is compressed. Unzip it first. Compressed .d files can go to AUSPOS as they are.");
+  const p = new RinexShrinker();
+  try {
+    const reader = f.stream().getReader(); const dec = new TextDecoder("latin1");
+    let rest = "", read = 0, lastPaint = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      read += value.length;
+      const lines = (rest + dec.decode(value, { stream: true })).split("\n"); rest = lines.pop();
+      for (const l of lines) p.line(l);
+      if (p.error && p.fileType && p.fileType !== "O") break;
+      const now = performance.now();
+      if (now - lastPaint > 80) { bar.style.width = (100 * read / f.size).toFixed(1) + "%"; lastPaint = now; await new Promise(r => setTimeout(r)); }
+    }
+    if (rest) p.line(rest);
+  } catch (e) { return fail(job, "Could not read the file: " + e.message); }
+  const r = p.finish();
+  if (p.error) return fail(job, p.error);
+  job.blob = new Blob([r.header, ...r.body], { type: "text/plain" });
+  job.name = outName(p.info.marker, p.first, usedNames);
+  job.p = p; job.start = toDate(p.first); job.end = toDate(p.last);
+  render(job); update();
+}
+
+function fail(job, msg) {
+  job.failed = true;
+  job.el.innerHTML = `<span class="name">${esc(job.file.name)}</span><span class="tag bad">Can't use</span><div class="msg bad">${esc(msg)}</div>`;
+  update();
+}
+
+function render(job) {
+  const p = job.p, i = p.info, dur = job.end - job.start, msgs = [];
+  if (dur < 3600e3) msgs.push(["bad", "Less than 1 hour of data. AUSPOS needs at least 1 hour."]);
+  const ready = new Date(Date.UTC(p.last.y, p.last.mo - 1, p.last.d + 1, 3, 0, 0));
+  if (Date.now() < ready) msgs.push(["warn", "Too early for AUSPOS. Submit after " + fmtT(ready) + "."]);
+  if (i.height == null || isNaN(i.height) || i.height === 0) msgs.push(["warn", "No antenna height in the file. Type the real height into AUSPOS."]);
+  const h = i.height == null || isNaN(i.height) ? "?" : i.height.toFixed(4) + " m";
+  job.el.innerHTML = `<span class="name">${esc(job.name)}</span><span class="tag ${msgs.some(m => m[0] === "bad") ? "bad" : "ok"}">${fmtMB(job.file.size)} → ${fmtMB(job.blob.size)}</span>
+    <span class="sub">Height <b>${h}</b> · ${fmtDur(dur)} · from ${esc(job.file.name)}</span>
+    ${msgs.map(([k, t]) => `<div class="msg ${k}">${esc(t)}</div>`).join("")}`;
+}
+
+function update() {
+  const ok = jobs.filter(j => j.blob), pending = jobs.some(j => !j.blob && !j.failed);
+  const btn = $("#saveAll");
+  btn.disabled = pending || !ok.length;
+  btn.textContent = pending ? "Shrinking…" : ok.length > 1 ? `Save ${ok.length} small files` : "Save small file";
+  let status = "";
+  if (!pending && ok.length > 1) {
+    let worst = Infinity, pair = null;
+    for (let a = 0; a < ok.length; a++) for (let b = a + 1; b < ok.length; b++) {
+      const ov = Math.min(ok[a].end, ok[b].end) - Math.max(ok[a].start, ok[b].start);
+      if (ov < worst) { worst = ov; pair = [ok[a].name, ok[b].name]; }
+    }
+    if (worst <= 3600e3) status = `<div class="status bad">${esc(pair[0])} and ${esc(pair[1])} don't overlap by more than 1 hour. Send them to AUSPOS separately.</div>`;
+    else if (ok.length > 20) status = `<div class="status bad">AUSPOS takes at most 20 files at once.</div>`;
+    else status = `<div class="status ok">All ${ok.length} files overlap, so they can be sent together.</div>`;
+  }
+  $("#status").innerHTML = status;
+  $("#where").textContent = ok.length ? "Saved to your Downloads folder" : "";
+  $("#where").hidden = !saved;
+  $("#heights").innerHTML = ok.map(j => `<div><span>${esc(j.name)}</span><b>${j.p.info.height == null || isNaN(j.p.info.height) ? "?" : j.p.info.height.toFixed(4)}</b></div>`).join("");
+  setStep(saved ? 3 : ok.length ? 2 : 1);
+  $("#next").hidden = !saved;
+}
+
+function save(job) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(job.blob); a.download = job.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+function reset() {
+  jobs.length = 0; usedNames.clear(); saved = false;
+  $("#list").innerHTML = ""; $("#status").innerHTML = ""; $("#work").hidden = true; $("#next").hidden = true;
+  $("#drop").classList.remove("compact"); $("#drop .big").textContent = "Drop files here or tap to choose"; $("#pick").value = "";
+  setStep(1);
+}
+
+$("#saveAll").onclick = async () => {
+  for (const j of jobs) if (j.blob) { save(j); await new Promise(r => setTimeout(r, 400)); }
+  saved = true; update();
+  $("#next").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+};
+$("#clear").onclick = reset;
+$("#pick").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
+const drop = $("#drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => e.preventDefault());
+</script>
+</body>
+</html>
