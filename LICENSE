@@ -1,21 +1,31 @@
-MIT License
+Shrink — Source-Available License
+Copyright (c) 2026 Basem Aloumar (GitHub: Studentpack-Aloumar). All rights reserved.
 
-Copyright (c) 2026 Basem Aloumar
+1. Free use of the tool
+   Anyone may use the hosted tool at https://shrink-gnss.vercel.app, or run an
+   unmodified copy of index.html on their own computer, to process their own
+   GNSS files, free of charge.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+2. Viewing the source
+   You may view and read the source code in this repository.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+3. Everything else needs written permission and a paid license
+   You may NOT, without prior written permission from the copyright holder and
+   a paid license agreement:
+   - copy, reuse or include any part of the code in another project, product
+     or service (open source or commercial);
+   - modify the code and distribute or host the modified version;
+   - redistribute, sell, sublicense or host the tool (modified or not) under
+     another name or address;
+   - use the code to train or build a competing tool or service.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+4. How to ask
+   Open an issue at https://github.com/Studentpack-Aloumar/shrink/issues or
+   contact the copyright holder through GitHub, describing the intended use.
+
+5. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE AUTHOR IS
+   NOT LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM ITS USE.
+   Always check AUSPOS results independently.
+
+Not affiliated with Geoscience Australia.

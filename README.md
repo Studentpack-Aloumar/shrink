@@ -42,4 +42,4 @@ Not affiliated with Geoscience Australia.
 
 ## License
 
-MIT
+Source-available, not open source. Free to use the tool for your own files. Copying, reusing, modifying or redistributing the code needs written permission and a paid license. See [LICENSE](LICENSE).
