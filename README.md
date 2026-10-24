@@ -2,7 +2,7 @@
 
 **Make large GNSS RINEX files small enough to upload to [AUSPOS](https://gnss.ga.gov.au/auspos) on a slow connection.**
 
-Live: https://shrink-gnss.vercel.app
+Live: https://shrink-app.vercel.app
 
 Receivers often log every 1–2 seconds and record every satellite system, so one session can be 70 MB or more. Uploads that big to AUSPOS tend to time out or fail with *"Failed to submit processing request"*.
 
@@ -43,7 +43,7 @@ git config core.hooksPath .githooks   # once per clone: runs the tests before ev
 
 1. `node test/run.js` (the pre-push hook does this too).
 2. `vercel` to get a preview, then smoke test: drop in a RINEX 2 and a 3.x file, save, check each output is about 1 MB, named `SSSSDDD0.YYO`, and the antenna height matches.
-3. `vercel --prod`, then check `curl https://shrink-gnss.vercel.app/ | cmp - index.html`.
+3. `vercel --prod`, then check `curl https://shrink-app.vercel.app/ | cmp - index.html`.
 
 **Rollback:** in Vercel, open the previous Ready deployment and choose *Promote to Production* (or `vercel rollback`). Roll back if the page fails to load, the script throws on a dropped file, or AUSPOS rejects the output.
 
